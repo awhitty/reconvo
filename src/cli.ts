@@ -16,6 +16,13 @@ const BOLD = ansi.bold
 const RESET = ansi.reset
 const CYAN = ansi.cyan
 
+/** User-facing error — printed cleanly without stack trace. */
+class UsageError extends Error {}
+
+function fail(msg: string): never {
+  throw new UsageError(msg)
+}
+
 // ── Helpers ────────────────────────────────────────────────────
 
 async function getScope(allFlag: boolean): Promise<string[] | undefined> {
@@ -92,9 +99,7 @@ function getSince(args: string[]): number | undefined {
   if (!raw) return undefined
   const ms = parseSince(raw)
   if (ms === undefined) {
-    console.error(`Invalid --since value: ${raw}`)
-    console.error(`Examples: 2h, 3d, 1w, today, yesterday, 2026-03-10`)
-    process.exit(1)
+    fail(`Invalid --since value: ${raw}\nExamples: 2h, 3d, 1w, today, yesterday, 2026-03-10`)
   }
   return ms
 }
@@ -138,8 +143,7 @@ async function cmdSearch(args: string[]): Promise<void> {
   const keywords = stripFlags(args)
 
   if (keywords.length === 0) {
-    console.error("Usage: reconvo search <query> [--all] [--source claude|opencode] [--json]")
-    process.exit(1)
+    fail("Usage: reconvo search <query> [--all] [--source claude|opencode] [--json]")
   }
 
   const sinceMs = getSince(args)
@@ -176,8 +180,7 @@ async function cmdRead(args: string[]): Promise<void> {
   const sessionId = positional[0]
 
   if (!sessionId) {
-    console.error("Usage: reconvo read <session-id> [--from N] [--to M] [--around N] [--radius R] [--json]")
-    process.exit(1)
+    fail("Usage: reconvo read <session-id> [--from N] [--to M] [--around N] [--radius R] [--role user|assistant] [--json]")
   }
 
   const messages = await Q.readMessages(sessionId, {
@@ -194,8 +197,7 @@ async function cmdRead(args: string[]): Promise<void> {
   }
 
   if (messages.length === 0) {
-    console.error(`No messages found for session: ${sessionId}`)
-    process.exit(1)
+    fail(`No messages found for session: ${sessionId}`)
   }
 
   for (const m of messages) {
@@ -213,8 +215,7 @@ async function cmdSkim(args: string[]): Promise<void> {
   const sessionId = positional[0]
 
   if (!sessionId) {
-    console.error("Usage: reconvo skim <session-id> [--head N] [--tail N] [--json]")
-    process.exit(1)
+    fail("Usage: reconvo skim <session-id> [--head N] [--tail N] [--role user|assistant] [--json]")
   }
 
   const result = await Q.skimSession(sessionId, flagVal(args, "--head"), flagVal(args, "--tail"), flagStr(args, "--role"))
@@ -275,8 +276,7 @@ async function cmdFiles(args: string[]): Promise<void> {
   const filePath = positional[0]
 
   if (!filePath) {
-    console.error("Usage: reconvo files <path> [--all] [--source claude|opencode]")
-    process.exit(1)
+    fail("Usage: reconvo files <path> [--all] [--source claude|opencode]")
   }
 
   const sinceMs = getSince(args)
@@ -335,6 +335,8 @@ ${BOLD}Context:${RESET}
 
 // ── Entry ──────────────────────────────────────────────────────
 
+let exitCode = 0
+
 const args = process.argv.slice(2)
 const cmd = args[0]
 const cmdArgs = args.slice(1)
@@ -366,20 +368,23 @@ try {
     } else if (cmd === "files") {
       await cmdFiles(cmdArgs)
     } else {
-      console.error(`Unknown command: ${cmd}`)
-      console.error(`Run 'reconvo help' for usage.`)
-      process.exit(1)
+      fail(`Unknown command: ${cmd}\nRun 'reconvo help' for usage.`)
     }
   }
-} catch (e) {
-  console.error(e)
-  process.exit(1)
+} catch (e: any) {
+  exitCode = 1
+  if (e instanceof UsageError) {
+    console.error(e.message)
+  } else {
+    console.error(`reconvo: ${e?.message ?? String(e)}`)
+    if (process.env.DEBUG) console.error(e?.stack)
+  }
 }
 
 // Force exit after stdout drains — skipping DuckDB native addon cleanup
 // avoids Bun segfault during GC of NAPI objects. OS reclaims resources.
 if (process.stdout.writableNeedDrain) {
-  process.stdout.once("drain", () => process.exit(0))
+  process.stdout.once("drain", () => process.exit(exitCode))
 } else {
-  process.exit(0)
+  process.exit(exitCode)
 }

@@ -51,7 +51,7 @@ reconvo skim abc123 --json
 
 Persistent [DuckDB](https://duckdb.org) index, built incrementally (mtime-based). Auto-updates on first query. ~100ms searches.
 
-Index: `~/.local/share/reconvo/index.duckdb` — delete to rebuild.
+Index: `~/.local/share/reconvo/index.duckdb` — delete to rebuild. Note: the index contains full conversation text from your sessions. Treat it like you would your shell history.
 
 ## Flags
 

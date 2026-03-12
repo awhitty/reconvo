@@ -8,6 +8,11 @@
 import { query } from "./index.ts"
 import type { Session, Message, SearchHit, SessionStats, DailyActivity } from "../types.ts"
 
+/** Escape a string for safe interpolation into SQL single-quoted literals. */
+function esc(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/'/g, "''").replace(/\x00/g, "")
+}
+
 /** List sessions, most recent first. */
 export async function listSessions(opts?: {
   source?: string
@@ -19,10 +24,10 @@ export async function listSessions(opts?: {
   const conditions: string[] = []
 
   if (opts?.source) {
-    conditions.push(`source = '${opts.source}'`)
+    conditions.push(`source = '${esc(opts.source)}'`)
   }
   if (opts?.scopePaths?.length) {
-    const conds = opts.scopePaths.map(p => `directory LIKE '${p}%'`).join(" OR ")
+    const conds = opts.scopePaths.map(p => `directory LIKE '${esc(p)}%'`).join(" OR ")
     conditions.push(`(${conds})`)
   }
   if (opts?.sinceMs) {
@@ -68,14 +73,14 @@ export async function searchSessions(
   opts?: { source?: string; scopePaths?: string[]; sinceMs?: number; limit?: number },
 ): Promise<SearchHit[]> {
   const limit = opts?.limit ?? 20
-  const kwConds = keywords.map(w => `m.content ILIKE '%${w.replace(/'/g, "''")}%'`).join(" OR ")
+  const kwConds = keywords.map(w => `m.content ILIKE '%${esc(w)}%'`).join(" OR ")
 
   const conditions: string[] = [`(${kwConds})`]
   if (opts?.source) {
-    conditions.push(`s.source = '${opts.source}'`)
+    conditions.push(`s.source = '${esc(opts.source)}'`)
   }
   if (opts?.scopePaths?.length) {
-    const conds = opts.scopePaths.map(p => `s.directory LIKE '${p}%'`).join(" OR ")
+    const conds = opts.scopePaths.map(p => `s.directory LIKE '${esc(p)}%'`).join(" OR ")
     conditions.push(`(${conds})`)
   }
   if (opts?.sinceMs) {
@@ -154,10 +159,12 @@ export async function readMessages(
     to = opts.around + radius + 1
   }
 
-  const conditions = [`session_id LIKE '${sessionPrefix}%'`]
+  const conditions = [`session_id LIKE '${esc(sessionPrefix)}%'`]
   if (from !== undefined) conditions.push(`position >= ${from}`)
   if (to !== undefined) conditions.push(`position < ${to}`)
-  if (opts?.role) conditions.push(`role = '${opts.role}'`)
+  if (opts?.role === "user" || opts?.role === "assistant") {
+    conditions.push(`role = '${opts.role}'`)
+  }
 
   const rows = await query<{
     session_id: string
@@ -209,7 +216,7 @@ export async function getStats(scopePaths?: string[]): Promise<{
 }> {
   let scopeWhere = ""
   if (scopePaths?.length) {
-    const conds = scopePaths.map(p => `s.directory LIKE '${p}%'`).join(" OR ")
+    const conds = scopePaths.map(p => `s.directory LIKE '${esc(p)}%'`).join(" OR ")
     scopeWhere = `AND (${conds})`
   }
 
@@ -276,11 +283,11 @@ export async function searchByFile(
   opts?: { source?: string; scopePaths?: string[]; sinceMs?: number; limit?: number },
 ): Promise<Session[]> {
   const limit = opts?.limit ?? 20
-  const conditions = [`m.content ILIKE '%${filePath.replace(/'/g, "''")}%'`]
+  const conditions = [`m.content ILIKE '%${esc(filePath)}%'`]
 
-  if (opts?.source) conditions.push(`s.source = '${opts.source}'`)
+  if (opts?.source) conditions.push(`s.source = '${esc(opts.source)}'`)
   if (opts?.scopePaths?.length) {
-    const conds = opts.scopePaths.map(p => `s.directory LIKE '${p}%'`).join(" OR ")
+    const conds = opts.scopePaths.map(p => `s.directory LIKE '${esc(p)}%'`).join(" OR ")
     conditions.push(`(${conds})`)
   }
   if (opts?.sinceMs) conditions.push(`s.last_at >= ${opts.sinceMs}`)

@@ -9,6 +9,9 @@
     "url": "https://github.com/awhitty/reconvo.git"
   },
   "keywords": ["claude-code", "opencode", "ai", "conversation", "search", "cli", "duckdb"],
+  "engines": {
+    "bun": ">=1.0"
+  },
   "bin": {
     "reconvo": "./src/cli.ts"
   },

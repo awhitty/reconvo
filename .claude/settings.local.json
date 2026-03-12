@@ -19,7 +19,9 @@
       "Bash(npm whoami:*)",
       "Bash(reconvo sessions:*)",
       "Bash(reconvo search:*)",
-      "Bash(reconvo skim:*)"
+      "Bash(reconvo skim:*)",
+      "Bash(find /Users/austin/Source/ocd -name *.md -path *skill* -o -name *.md -path *command* -o -name *.md -path *slash*)",
+      "Read(//Users/austin/.claude/**)"
     ]
   }
 }
