@@ -1,93 +1,78 @@
 # reconvo
 
-Unified conversation search across [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [OpenCode](https://github.com/opencode-ai/opencode) sessions. One command to search, browse, and read your AI coding conversations — no matter which tool created them.
-
-## Install
-
-```bash
-git clone https://github.com/awhitty/reconvo.git
-cd reconvo
-bun install
-```
-
-Or link it globally:
-
-```bash
-bun link
-reconvo
-```
-
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `browse` | Interactive split-pane TUI (default) |
-| `sessions` | List sessions, most recent first |
-| `search <query>` | Keyword search across conversations |
-| `read <id>` | Read messages from a session |
-| `skim <id>` | Head + tail preview |
-| `files <path>` | Find sessions that touched a file |
-| `stats` | Model usage + daily activity dashboard |
-| `index` | Rebuild search index (usually automatic) |
-
-## How it works
+Human- and agent-friendly CLI to search [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [OpenCode](https://github.com/opencode-ai/opencode) sessions. Get more out of your context windows.
 
 ```
 ~/.claude/projects/*/*.jsonl ──┐
-                               ├─ indexer ─→ ~/.local/share/reconvo/index.duckdb ─→ queries
+                               ├─→ index.duckdb ─→ search, browse, read
 ~/.local/share/opencode/*.db ──┘
 ```
 
-A persistent [DuckDB](https://duckdb.org) index is built incrementally (mtime-based) from Claude Code JSONL logs and OpenCode's SQLite database. Queries hit the index (~100ms). Inside a git repo, results scope to that project automatically — use `--all` to search everything.
+## Setup
+
+```bash
+git clone https://github.com/awhitty/reconvo.git && cd reconvo
+bun install
+bun link    # makes `reconvo` available globally
+```
+
+## Usage
+
+```bash
+reconvo                          # browse TUI (default)
+reconvo search "auth middleware" # keyword search
+reconvo sessions                 # list recent, scoped to current project
+reconvo sessions --all           # across all projects
+reconvo files src/db/index.ts    # sessions that touched a file
+reconvo skim 510c7782            # head + tail preview
+reconvo read 510c7782            # full transcript
+reconvo stats                    # model usage, daily activity
+```
+
+Results scope to the current git repo. `--all` for everything. `--json` for structured output.
 
 ## Browse TUI
 
-Three views, cycle with `tab`: **recent** (flat by time) → **tree** (grouped by project) → **lineage** (parent → child fork nesting).
+Three views, cycle with `tab`: **recent** | **tree** (by project) | **lineage** (fork nesting).
 
-Keys: `j`/`k` navigate, `/` filter, `enter`/`c` copy session ID, `q` quit.
+`j`/`k` navigate, `/` filter, `enter`/`c` copy session ID, `q` quit.
+
+## Agent use
+
+Agents can call reconvo to recall past sessions:
+
+```bash
+reconvo search "auth rewrite" --json
+reconvo files src/middleware.ts --json
+reconvo skim abc123 --json
+```
+
+## How it works
+
+Persistent [DuckDB](https://duckdb.org) index, built incrementally (mtime-based). Auto-updates on first query. ~100ms searches.
+
+Index: `~/.local/share/reconvo/index.duckdb` — delete to rebuild.
 
 ## Flags
 
 | Flag | Description |
 |------|-------------|
-| `--all` | Search all projects (ignore git context) |
-| `--source claude\|opencode` | Filter by source |
-| `--json` | JSON output |
-| `--from N`, `--to M` | Message range (read) |
-| `--around N --radius R` | Center on position with context (read) |
+| `--all` | Search all projects |
+| `--source claude\|opencode` | Filter by tool |
+| `--json` | Structured output |
+| `--from N`, `--to M` | Slice transcript by position |
+| `--around N --radius R` | Window around a message |
 | `--force` | Full re-index |
-
-## Architecture
-
-```
-src/
-├── cli.ts              # entry point
-├── types.ts            # Session, Message, SearchHit
-├── db/
-│   ├── index.ts        # DuckDB connection + schema
-│   ├── indexer.ts       # incremental JSONL + SQLite → DuckDB
-│   └── queries.ts       # read-only query layer
-├── browse/
-│   ├── tui.ts           # raw ANSI split-pane TUI
-│   └── tree.ts          # recent / project / lineage view models
-├── context/git.ts       # repo root, branch detection
-└── util/                # ansi, fmt, clipboard helpers
-```
-
-Index: `~/.local/share/reconvo/index.duckdb` — delete to force rebuild.
 
 ## Development
 
 ```bash
-bun test              # run tests
-bun run src/cli.ts    # run CLI
-tsc --noEmit          # typecheck
+bun test           # tests against fixture data
+bun run src/cli.ts # run
+tsc --noEmit       # typecheck
 ```
 
-## Requirements
-
-- [Bun](https://bun.sh) >= 1.0
-- At least one of: Claude Code (`~/.claude/`), OpenCode (`~/.local/share/opencode/`)
+Requires [Bun](https://bun.sh) >= 1.0 and at least one of Claude Code or OpenCode installed.
 
 ## License
 
