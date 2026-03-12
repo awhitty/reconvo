@@ -1,0 +1,21 @@
+{
+  "name": "reconvo",
+  "version": "0.1.0",
+  "description": "Recall Conversation — unified search across Claude Code and OpenCode sessions",
+  "type": "module",
+  "bin": {
+    "reconvo": "./src/cli.ts"
+  },
+  "scripts": {
+    "dev": "bun run src/cli.ts",
+    "test": "bun test --timeout 30000",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "5.8.2",
+    "@types/bun": "1.2.9"
+  },
+  "dependencies": {
+    "duckdb": "^1.2.2"
+  }
+}
