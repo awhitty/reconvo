@@ -33,6 +33,7 @@
     "@types/bun": "1.2.9"
   },
   "dependencies": {
-    "duckdb": "^1.2.2"
+    "duckdb": "^1.2.2",
+    "reconvo": "^0.1.0"
   }
 }

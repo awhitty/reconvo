@@ -6,6 +6,7 @@
       "name": "reconvo",
       "dependencies": {
         "duckdb": "^1.2.2",
+        "reconvo": "^0.1.0",
       },
       "devDependencies": {
         "@types/bun": "1.2.9",
@@ -171,6 +172,8 @@
     "promise-retry": ["promise-retry@2.0.1", "", { "dependencies": { "err-code": "^2.0.2", "retry": "^0.12.0" } }, "sha512-y+WKFlBR8BGXnsNlIHFGPZmyDf3DFMoLhaflAnyZgV6rG6xu+JwesTo2Q9R6XwYmtmwAFCkAk3e35jEdoeh/3g=="],
 
     "readable-stream": ["readable-stream@3.6.2", "", { "dependencies": { "inherits": "^2.0.3", "string_decoder": "^1.1.1", "util-deprecate": "^1.0.1" } }, "sha512-9u/sniCrY3D5WdsERHzHE4G2YCXqoG5FTHUiCC4SIbr6XcLZBY05ya9EKjYek9O5xOAwjGq+1JdGBAS7Q9ScoA=="],
+
+    "reconvo": ["reconvo@0.1.0", "", { "dependencies": { "duckdb": "^1.2.2" }, "bin": { "reconvo": "dist/cli.js" } }, "sha512-DHgrfa1ES0Czg5QX9+EtParauNufrYsyWcij3wjsq47BgbjVwUEoSvjDiYt/l4HOvROUvLcvZl+HttF6BvOAMA=="],
 
     "retry": ["retry@0.12.0", "", {}, "sha512-9LkiTwjUh6rT555DtE9rTX+BKByPfrMzEAtnlEtdEwr3Nkffwiihqe2bWADg+OQRjt9gl6ICdmB/ZFDCGAtSow=="],
 

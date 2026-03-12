@@ -7,11 +7,12 @@
  * Keys:
  *   j/down  move down         k/up  move up
  *   l/right expand/preview    h/left collapse
- *   enter   copy session ID   tab   toggle tree/recent view
+ *   enter   open session in original tool (claude/opencode)
+ *   c       copy session ID   tab   toggle tree/recent view
  *   /       search filter     q/esc quit
- *   c       copy session ID
  */
 
+import { spawn } from "node:child_process"
 import { readMessages } from "../db/queries.ts"
 import type { ProjectNode, SessionNode, TreeRow } from "./tree.ts"
 import { loadTree } from "./tree.ts"
@@ -142,7 +143,7 @@ function renderTree(state: TuiState): void {
   } else if (state.filter) {
     write(`${ansi.dim}filter: ${state.filter}  (esc to clear)${ansi.reset}`)
   } else {
-    write(`${ansi.dim}j/k navigate  tab view  c copy id  / filter  q quit${ansi.reset}`)
+    write(`${ansi.dim}j/k navigate  enter open  c copy id  tab view  / filter  q quit${ansi.reset}`)
   }
 }
 
@@ -286,7 +287,7 @@ function rebuildVisibleRows(state: TuiState): void {
   state.cursor = Math.min(state.cursor, Math.max(0, state.rows.length - 1))
 }
 
-function handleKey(key: Buffer, state: TuiState): "quit" | "copy" | "continue" {
+function handleKey(key: Buffer, state: TuiState): "quit" | "open" | "copy" | "continue" {
   const str = key.toString()
 
   if (state.filterMode) {
@@ -414,9 +415,14 @@ function handleKey(key: Buffer, state: TuiState): "quit" | "copy" | "continue" {
       state.scroll = Math.max(0, state.cursor - visibleRows + 1)
       return "continue"
 
-    case "c":
     case "\r":
     case "\n": {
+      const row = state.rows[state.cursor]
+      if (row?.node.kind === "session") return "open"
+      return "continue"
+    }
+
+    case "c": {
       const row = state.rows[state.cursor]
       if (row?.node.kind === "session") return "copy"
       return "continue"
@@ -496,6 +502,27 @@ export async function browse(scopePaths?: string[]): Promise<void> {
     if (action === "quit") {
       cleanup()
       return
+    }
+
+    if (action === "open") {
+      const row = state.rows[state.cursor]
+      if (row?.node.kind === "session") {
+        const session = (row.node as SessionNode).session
+        cleanup()
+        if (session.source === "opencode") {
+          spawn("opencode", ["--session", session.id], {
+            stdio: "inherit",
+            cwd: session.directory,
+          })
+        } else {
+          spawn("claude", ["--resume", session.id], {
+            stdio: "inherit",
+            cwd: session.directory,
+          })
+        }
+        return
+      }
+      continue
     }
 
     if (action === "copy") {
