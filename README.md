@@ -8,12 +8,19 @@ Human- and agent-friendly CLI to search [Claude Code](https://docs.anthropic.com
 ~/.local/share/opencode/*.db ──┘
 ```
 
-## Setup
+## Install
+
+```bash
+npx reconvo            # run without installing
+npm install -g reconvo # or install globally
+```
+
+From source:
 
 ```bash
 git clone https://github.com/awhitty/reconvo.git && cd reconvo
-bun install
-bun link    # makes `reconvo` available globally
+bun install && bun run build
+bun link
 ```
 
 ## Usage

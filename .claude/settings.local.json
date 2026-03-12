@@ -21,7 +21,9 @@
       "Bash(reconvo search:*)",
       "Bash(reconvo skim:*)",
       "Bash(find /Users/austin/Source/ocd -name *.md -path *skill* -o -name *.md -path *command* -o -name *.md -path *slash*)",
-      "Read(//Users/austin/.claude/**)"
+      "Read(//Users/austin/.claude/**)",
+      "Bash(node dist/cli.js help 2>&1)",
+      "Bash(node dist/cli.js sessions --all 2>&1 | head -5)"
     ]
   }
 }

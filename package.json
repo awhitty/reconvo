@@ -10,17 +10,20 @@
   },
   "keywords": ["claude-code", "opencode", "ai", "conversation", "search", "cli", "duckdb"],
   "engines": {
+    "node": ">=18",
     "bun": ">=1.0"
   },
   "bin": {
-    "reconvo": "./src/cli.ts"
+    "reconvo": "./dist/cli.js"
   },
   "files": [
-    "src",
+    "dist",
     "LICENSE",
     "README.md"
   ],
   "scripts": {
+    "build": "bun build src/cli.ts --outdir dist --target node --external duckdb && sed -i '' '1s|#!/usr/bin/env bun|#!/usr/bin/env node|' dist/cli.js",
+    "prepublishOnly": "bun run build",
     "dev": "bun run src/cli.ts",
     "test": "bun test --timeout 30000",
     "typecheck": "tsc --noEmit"

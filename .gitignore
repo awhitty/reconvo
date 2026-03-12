@@ -1,4 +1,5 @@
 node_modules/
+dist/
 *.duckdb
 *.duckdb.wal
 .DS_Store
