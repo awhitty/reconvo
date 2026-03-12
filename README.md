@@ -5,35 +5,30 @@ Unified conversation search across [Claude Code](https://docs.anthropic.com/en/d
 ## Install
 
 ```bash
-# Clone and install
 git clone https://github.com/awhitty/reconvo.git
 cd reconvo
 bun install
-
-# Run
-bun run src/cli.ts            # launch browse TUI (default)
-bun run src/cli.ts help       # show all commands
 ```
 
 Or link it globally:
 
 ```bash
-bun link                      # makes `reconvo` available everywhere
-reconvo                       # launch from any directory
+bun link
+reconvo
 ```
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `browse` | Interactive TUI — split pane with session list + preview (default) |
+| `browse` | Interactive split-pane TUI (default) |
 | `sessions` | List sessions, most recent first |
-| `search <query>` | Keyword search across all conversations |
-| `read <id>` | Read full messages from a session |
-| `skim <id>` | Head + tail preview of a session |
+| `search <query>` | Keyword search across conversations |
+| `read <id>` | Read messages from a session |
+| `skim <id>` | Head + tail preview |
 | `files <path>` | Find sessions that touched a file |
-| `stats` | Usage dashboard — models, tokens, daily activity |
-| `index` | Build/update the search index (usually automatic) |
+| `stats` | Model usage + daily activity dashboard |
+| `index` | Rebuild search index (usually automatic) |
 
 ## How it works
 
@@ -43,107 +38,57 @@ reconvo                       # launch from any directory
 ~/.local/share/opencode/*.db ──┘
 ```
 
-reconvo builds a persistent [DuckDB](https://duckdb.org) index from both sources:
-
-- **Claude Code** — parses JSONL conversation logs from `~/.claude/projects/`
-- **OpenCode** — reads the SQLite database via DuckDB's `sqlite_scanner`
-
-The index updates incrementally on first query (mtime-based), so searches are fast (~100ms) after the initial build. Inside a git repo, results are automatically scoped to that project. Use `--all` to search everything.
+A persistent [DuckDB](https://duckdb.org) index is built incrementally (mtime-based) from Claude Code JSONL logs and OpenCode's SQLite database. Queries hit the index (~100ms). Inside a git repo, results scope to that project automatically — use `--all` to search everything.
 
 ## Browse TUI
 
-The default command opens a split-pane terminal UI.
+Three views, cycle with `tab`: **recent** (flat by time) → **tree** (grouped by project) → **lineage** (parent → child fork nesting).
 
-**Views** (cycle with `tab`):
-
-| View | What it shows |
-|------|---------------|
-| recent | All sessions sorted by recency |
-| tree | Sessions grouped by project directory |
-| lineage | Project groups with parent → child fork nesting |
-
-**Keys**:
-
-| Key | Action |
-|-----|--------|
-| `j` / `k` | Navigate up/down |
-| `tab` | Cycle view: recent → tree → lineage |
-| `/` | Filter sessions |
-| `enter` or `c` | Copy session ID to clipboard |
-| `q` | Quit |
+Keys: `j`/`k` navigate, `/` filter, `enter`/`c` copy session ID, `q` quit.
 
 ## Flags
 
-| Flag | Applies to | Description |
-|------|-----------|-------------|
-| `--all` | most commands | Search all projects (ignore git context) |
-| `--source claude\|opencode` | most commands | Filter by source |
-| `--json` | sessions, search, read, skim | JSON output |
-| `--from N` | read | Start at message position N |
-| `--to M` | read | End at message position M |
-| `--around N --radius R` | read | Center on position N with context |
-| `--head N --tail N` | skim | Control preview size |
-| `--force` | index | Full re-index (skip mtime check) |
-| `-v`, `--verbose` | index | Show indexing progress |
+| Flag | Description |
+|------|-------------|
+| `--all` | Search all projects (ignore git context) |
+| `--source claude\|opencode` | Filter by source |
+| `--json` | JSON output |
+| `--from N`, `--to M` | Message range (read) |
+| `--around N --radius R` | Center on position with context (read) |
+| `--force` | Full re-index |
 
 ## Architecture
 
 ```
 src/
-├── cli.ts                 # entry point, command dispatch
-├── types.ts               # Session, Message, SearchHit types
+├── cli.ts              # entry point
+├── types.ts            # Session, Message, SearchHit
 ├── db/
-│   ├── index.ts           # persistent DuckDB connection + schema
-│   ├── indexer.ts          # incremental indexer (JSONL + SQLite → DuckDB)
-│   ├── queries.ts          # read-only query layer (all commands use this)
-│   ├── engine.ts           # in-memory DuckDB engine (used by tests)
-│   ├── claude-code.ts      # raw JSONL adapter (used by tests)
-│   └── opencode.ts         # raw SQLite adapter (used by tests)
+│   ├── index.ts        # DuckDB connection + schema
+│   ├── indexer.ts       # incremental JSONL + SQLite → DuckDB
+│   └── queries.ts       # read-only query layer
 ├── browse/
-│   ├── tui.ts              # split-pane TUI, raw ANSI rendering
-│   └── tree.ts             # tree model: recent / project / lineage views
-├── commands/               # thin command wrappers
-├── context/
-│   └── git.ts              # detect repo root, branch, worktrees
-└── util/
-    ├── ansi.ts             # ANSI escape helpers
-    ├── fmt.ts              # time formatting, truncation, columns
-    └── clipboard.ts        # pbcopy/xclip clipboard access
+│   ├── tui.ts           # raw ANSI split-pane TUI
+│   └── tree.ts          # recent / project / lineage view models
+├── context/git.ts       # repo root, branch detection
+└── util/                # ansi, fmt, clipboard helpers
 ```
 
-### Data model
-
-```typescript
-Session {
-  id, source, directory, branch, title,
-  parentId,                    // fork provenance (OpenCode)
-  startedAt, lastAt, messageCount
-}
-
-Message {
-  sessionId, role, content, timestamp, position
-}
-```
-
-### Index location
-
-```
-~/.local/share/reconvo/index.duckdb
-```
-
-Delete it to force a full rebuild. It will be recreated automatically on the next query.
+Index: `~/.local/share/reconvo/index.duckdb` — delete to force rebuild.
 
 ## Development
 
 ```bash
-bun test              # 24 tests, ~84ms
+bun test              # run tests
 bun run src/cli.ts    # run CLI
 tsc --noEmit          # typecheck
 ```
 
-Tests use fixture data in `fixtures/` and query it directly via an in-memory DuckDB engine, independent of the persistent index.
-
 ## Requirements
 
 - [Bun](https://bun.sh) >= 1.0
-- At least one of: Claude Code history (`~/.claude/`), OpenCode database (`~/.local/share/opencode/`)
+- At least one of: Claude Code (`~/.claude/`), OpenCode (`~/.local/share/opencode/`)
+
+## License
+
+[MIT](LICENSE)
