@@ -41,16 +41,14 @@ export function getConn(): duckdb.Connection {
 export function query<T = Record<string, unknown>>(sql: string, ...params: unknown[]): Promise<T[]> {
   return new Promise((resolve, reject) => {
     const conn = getConn()
+    const cb = (err: Error | null, rows: any) => {
+      if (err) reject(err)
+      else resolve((rows ?? []) as T[])
+    }
     if (params.length > 0) {
-      conn.all(sql, ...params, (err: Error | null, rows: T[]) => {
-        if (err) reject(err)
-        else resolve(rows ?? [])
-      })
+      conn.all(sql, ...params, cb)
     } else {
-      conn.all(sql, (err: Error | null, rows: T[]) => {
-        if (err) reject(err)
-        else resolve(rows ?? [])
-      })
+      conn.all(sql, cb)
     }
   })
 }

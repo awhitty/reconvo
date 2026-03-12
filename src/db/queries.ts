@@ -281,11 +281,12 @@ export async function searchByFile(
     directory: string
     branch: string | null
     title: string
+    parent_id: string | null
     started_at: number
     last_at: number
     message_count: number
   }>(`
-    SELECT DISTINCT s.id, s.source, s.directory, s.branch, s.title,
+    SELECT DISTINCT s.id, s.source, s.directory, s.branch, s.title, s.parent_id,
            s.started_at, s.last_at, s.message_count
     FROM session s
     JOIN message m ON m.session_id = s.id

@@ -12,7 +12,10 @@
       "Bash(bun test:*)",
       "Bash(bun run:*)",
       "Bash(tsc *)",
-      "Bash(gh auth:*)"
+      "Bash(gh auth:*)",
+      "Bash(gh repo:*)",
+      "Bash(gh run:*)",
+      "Bash(bunx tsc:*)"
     ]
   }
 }
