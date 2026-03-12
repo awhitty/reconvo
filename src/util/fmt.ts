@@ -75,3 +75,38 @@ export function col(s: string, width: number): string {
   const t = truncatePlain(s, width)
   return t + " ".repeat(Math.max(0, width - t.length))
 }
+
+/**
+ * Parse a --since value into epoch ms.
+ * Accepts: "2h", "3d", "1w", "today", "yesterday", "2026-03-10"
+ */
+export function parseSince(val: string): number | undefined {
+  const now = Date.now()
+  const lower = val.toLowerCase().trim()
+
+  // Named
+  if (lower === "today") {
+    const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime()
+  }
+  if (lower === "yesterday") {
+    const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - 1); return d.getTime()
+  }
+
+  // Relative: 2h, 3d, 1w, 30m
+  const rel = lower.match(/^(\d+)([mhdw])$/)
+  if (rel) {
+    const n = parseInt(rel[1], 10)
+    const unit = rel[2]
+    const ms = unit === "m" ? n * 60_000
+             : unit === "h" ? n * 3_600_000
+             : unit === "d" ? n * 86_400_000
+             : n * 604_800_000 // w
+    return now - ms
+  }
+
+  // Absolute date: 2026-03-10
+  const d = new Date(lower)
+  if (!isNaN(d.getTime())) return d.getTime()
+
+  return undefined
+}

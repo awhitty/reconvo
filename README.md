@@ -1,6 +1,6 @@
 # reconvo
 
-Human- and agent-friendly CLI to search [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [OpenCode](https://github.com/opencode-ai/opencode) sessions. Get more out of your context windows.
+Human- and agent-friendly CLI to search [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [OpenCode](https://github.com/anomalyco/opencode) sessions. Get more out of your context windows.
 
 ```
 ~/.claude/projects/*/*.jsonl ──┐
@@ -59,6 +59,8 @@ Index: `~/.local/share/reconvo/index.duckdb` — delete to rebuild.
 |------|-------------|
 | `--all` | Search all projects |
 | `--source claude\|opencode` | Filter by tool |
+| `--since <expr>` | Time filter: `2h`, `3d`, `1w`, `today`, `yesterday`, `2026-03-10` |
+| `--role user\|assistant` | Filter messages by role (read/skim) |
 | `--json` | Structured output |
 | `--from N`, `--to M` | Slice transcript by position |
 | `--around N --radius R` | Window around a message |

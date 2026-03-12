@@ -15,7 +15,11 @@
       "Bash(gh auth:*)",
       "Bash(gh repo:*)",
       "Bash(gh run:*)",
-      "Bash(bunx tsc:*)"
+      "Bash(bunx tsc:*)",
+      "Bash(npm whoami:*)",
+      "Bash(reconvo sessions:*)",
+      "Bash(reconvo search:*)",
+      "Bash(reconvo skim:*)"
     ]
   }
 }

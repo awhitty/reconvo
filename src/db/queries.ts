@@ -12,6 +12,7 @@ import type { Session, Message, SearchHit, SessionStats, DailyActivity } from ".
 export async function listSessions(opts?: {
   source?: string
   scopePaths?: string[]
+  sinceMs?: number
   limit?: number
 }): Promise<Session[]> {
   const limit = opts?.limit ?? 50
@@ -23,6 +24,9 @@ export async function listSessions(opts?: {
   if (opts?.scopePaths?.length) {
     const conds = opts.scopePaths.map(p => `directory LIKE '${p}%'`).join(" OR ")
     conditions.push(`(${conds})`)
+  }
+  if (opts?.sinceMs) {
+    conditions.push(`last_at >= ${opts.sinceMs}`)
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
@@ -61,7 +65,7 @@ export async function listSessions(opts?: {
 /** Search sessions by keyword (ILIKE on message content). */
 export async function searchSessions(
   keywords: string[],
-  opts?: { source?: string; scopePaths?: string[]; limit?: number },
+  opts?: { source?: string; scopePaths?: string[]; sinceMs?: number; limit?: number },
 ): Promise<SearchHit[]> {
   const limit = opts?.limit ?? 20
   const kwConds = keywords.map(w => `m.content ILIKE '%${w.replace(/'/g, "''")}%'`).join(" OR ")
@@ -73,6 +77,9 @@ export async function searchSessions(
   if (opts?.scopePaths?.length) {
     const conds = opts.scopePaths.map(p => `s.directory LIKE '${p}%'`).join(" OR ")
     conditions.push(`(${conds})`)
+  }
+  if (opts?.sinceMs) {
+    conditions.push(`s.last_at >= ${opts.sinceMs}`)
   }
 
   const where = conditions.join(" AND ")
@@ -136,7 +143,7 @@ export async function searchSessions(
 /** Read messages from a session (by ID or prefix). */
 export async function readMessages(
   sessionPrefix: string,
-  opts?: { from?: number; to?: number; around?: number; radius?: number },
+  opts?: { from?: number; to?: number; around?: number; radius?: number; role?: string },
 ): Promise<Message[]> {
   let from = opts?.from
   let to = opts?.to
@@ -150,6 +157,7 @@ export async function readMessages(
   const conditions = [`session_id LIKE '${sessionPrefix}%'`]
   if (from !== undefined) conditions.push(`position >= ${from}`)
   if (to !== undefined) conditions.push(`position < ${to}`)
+  if (opts?.role) conditions.push(`role = '${opts.role}'`)
 
   const rows = await query<{
     session_id: string
@@ -178,8 +186,9 @@ export async function skimSession(
   sessionPrefix: string,
   head = 3,
   tail = 3,
+  role?: string,
 ): Promise<{ head: Message[]; tail: Message[]; skipped: number; total: number }> {
-  const all = await readMessages(sessionPrefix)
+  const all = await readMessages(sessionPrefix, { role })
 
   if (all.length <= head + tail) {
     return { head: all, tail: [], skipped: 0, total: all.length }
@@ -264,7 +273,7 @@ export async function getStats(scopePaths?: string[]): Promise<{
 /** Find sessions that mention a file path. */
 export async function searchByFile(
   filePath: string,
-  opts?: { source?: string; scopePaths?: string[]; limit?: number },
+  opts?: { source?: string; scopePaths?: string[]; sinceMs?: number; limit?: number },
 ): Promise<Session[]> {
   const limit = opts?.limit ?? 20
   const conditions = [`m.content ILIKE '%${filePath.replace(/'/g, "''")}%'`]
@@ -274,6 +283,7 @@ export async function searchByFile(
     const conds = opts.scopePaths.map(p => `s.directory LIKE '${p}%'`).join(" OR ")
     conditions.push(`(${conds})`)
   }
+  if (opts?.sinceMs) conditions.push(`s.last_at >= ${opts.sinceMs}`)
 
   const rows = await query<{
     id: string

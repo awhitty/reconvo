@@ -1,11 +1,22 @@
 {
   "name": "reconvo",
   "version": "0.1.0",
-  "description": "Recall Conversation — unified search across Claude Code and OpenCode sessions",
+  "description": "Human- and agent-friendly CLI to search Claude Code and OpenCode sessions",
   "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/awhitty/reconvo.git"
+  },
+  "keywords": ["claude-code", "opencode", "ai", "conversation", "search", "cli", "duckdb"],
   "bin": {
     "reconvo": "./src/cli.ts"
   },
+  "files": [
+    "src",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "dev": "bun run src/cli.ts",
     "test": "bun test --timeout 30000",

@@ -8,7 +8,7 @@ import { close, getIndexPath } from "./db/index.ts"
 import * as Q from "./db/queries.ts"
 import { detect, scope } from "./context/git.ts"
 import { ansi } from "./util/ansi.ts"
-import { agoLong, col, truncatePlain } from "./util/fmt.ts"
+import { agoLong, col, truncatePlain, parseSince } from "./util/fmt.ts"
 import type { Source } from "./types.ts"
 
 const DIM = ansi.dim
@@ -39,10 +39,16 @@ function stripFlags(args: string[]): string[] {
   let skip = false
   for (const arg of args) {
     if (skip) { skip = false; continue }
-    if (arg === "--source" || arg === "--from" || arg === "--to" || arg === "--around" || arg === "--radius" || arg === "--head" || arg === "--tail") { skip = true; continue }
+    if (arg === "--source" || arg === "--from" || arg === "--to" || arg === "--around" || arg === "--radius" || arg === "--head" || arg === "--tail" || arg === "--since" || arg === "--role") { skip = true; continue }
     if (!arg.startsWith("--")) result.push(arg)
   }
   return result
+}
+
+function flagStr(args: string[], name: string): string | undefined {
+  const idx = args.indexOf(name)
+  if (idx === -1 || idx + 1 >= args.length) return undefined
+  return args[idx + 1]
 }
 
 function flagVal(args: string[], name: string): number | undefined {
@@ -81,13 +87,26 @@ async function cmdIndex(args: string[]): Promise<void> {
   console.log(`Index: ${getIndexPath()}`)
 }
 
+function getSince(args: string[]): number | undefined {
+  const raw = flagStr(args, "--since")
+  if (!raw) return undefined
+  const ms = parseSince(raw)
+  if (ms === undefined) {
+    console.error(`Invalid --since value: ${raw}`)
+    console.error(`Examples: 2h, 3d, 1w, today, yesterday, 2026-03-10`)
+    process.exit(1)
+  }
+  return ms
+}
+
 async function cmdSessions(args: string[]): Promise<void> {
   const jsonOut = args.includes("--json")
   const allFlag = args.includes("--all")
   const source = parseSource(args)
+  const sinceMs = getSince(args)
   const scopePaths = await getScope(allFlag)
 
-  const results = await Q.listSessions({ source, scopePaths })
+  const results = await Q.listSessions({ source, scopePaths, sinceMs })
 
   if (jsonOut) {
     console.log(JSON.stringify(results, null, 2))
@@ -123,8 +142,9 @@ async function cmdSearch(args: string[]): Promise<void> {
     process.exit(1)
   }
 
+  const sinceMs = getSince(args)
   const scopePaths = await getScope(allFlag)
-  const results = await Q.searchSessions(keywords, { source, scopePaths })
+  const results = await Q.searchSessions(keywords, { source, scopePaths, sinceMs })
 
   if (jsonOut) {
     console.log(JSON.stringify(results, null, 2))
@@ -165,6 +185,7 @@ async function cmdRead(args: string[]): Promise<void> {
     to: flagVal(args, "--to"),
     around: flagVal(args, "--around"),
     radius: flagVal(args, "--radius"),
+    role: flagStr(args, "--role"),
   })
 
   if (jsonOut) {
@@ -196,7 +217,7 @@ async function cmdSkim(args: string[]): Promise<void> {
     process.exit(1)
   }
 
-  const result = await Q.skimSession(sessionId, flagVal(args, "--head"), flagVal(args, "--tail"))
+  const result = await Q.skimSession(sessionId, flagVal(args, "--head"), flagVal(args, "--tail"), flagStr(args, "--role"))
 
   if (jsonOut) {
     console.log(JSON.stringify(result, null, 2))
@@ -258,8 +279,9 @@ async function cmdFiles(args: string[]): Promise<void> {
     process.exit(1)
   }
 
+  const sinceMs = getSince(args)
   const scopePaths = await getScope(allFlag)
-  const results = await Q.searchByFile(filePath, { source, scopePaths })
+  const results = await Q.searchByFile(filePath, { source, scopePaths, sinceMs })
 
   if (results.length === 0) {
     console.log(`No sessions found touching "${filePath}"`)
@@ -291,15 +313,17 @@ ${BOLD}Index flags:${RESET}
   --force            Force full re-index
   --verbose, -v      Show progress
 
-${BOLD}Read flags:${RESET}
+${BOLD}Read/skim flags:${RESET}
   --from N           Start at message position N
   --to M             End at message position M
   --around N         Center on position N
   --radius R         Context radius (default: 3)
+  --role <role>      Filter: user, assistant
 
 ${BOLD}General flags:${RESET}
   --all              Search all projects (ignore git context)
   --source <src>     Filter: claude, opencode
+  --since <expr>     Time filter: 2h, 3d, 1w, today, yesterday, 2026-03-10
   --json             JSON output
 
 ${BOLD}Context:${RESET}
