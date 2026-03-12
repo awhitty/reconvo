@@ -24,7 +24,9 @@
       "Read(//Users/austin/.claude/**)",
       "Bash(node dist/cli.js help 2>&1)",
       "Bash(node dist/cli.js sessions --all 2>&1 | head -5)",
-      "Bash(opencode --help 2>&1 | grep -i resume | head -5; opencode --help 2>&1 | grep -i session | head -5)"
+      "Bash(opencode --help 2>&1 | grep -i resume | head -5; opencode --help 2>&1 | grep -i session | head -5)",
+      "Bash(npm view:*)",
+      "Bash(npm ls:*)"
     ]
   }
 }

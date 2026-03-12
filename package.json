@@ -1,6 +1,6 @@
 {
   "name": "reconvo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Human- and agent-friendly CLI to search Claude Code and OpenCode sessions",
   "type": "module",
   "license": "MIT",
@@ -33,7 +33,6 @@
     "@types/bun": "1.2.9"
   },
   "dependencies": {
-    "duckdb": "^1.2.2",
-    "reconvo": "^0.1.0"
+    "duckdb": "^1.4.4"
   }
 }
