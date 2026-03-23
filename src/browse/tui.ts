@@ -21,7 +21,7 @@ import { ago, clockTime, truncate, visibleLength } from "../util/fmt.ts"
 import { copyToClipboard } from "../util/clipboard.ts"
 
 type ViewMode = "recent" | "tree" | "lineage"
-const VIEW_MODES: ViewMode[] = ["recent", "tree", "lineage"]
+const VIEW_MODES: ViewMode[] = ["lineage", "recent", "tree"]
 
 interface TuiState {
   rows: TreeRow[]
@@ -40,6 +40,8 @@ interface TuiState {
   collapsed: Set<number>
   sessionProject: Map<string, string> // session ID → project name
   statusMessage: string | null
+  scopePaths: string[] | undefined
+  originalScopePaths: string[] | undefined
 }
 
 function renderTree(state: TuiState): void {
@@ -54,7 +56,10 @@ function renderTree(state: TuiState): void {
   write(ansi.moveTo(1, 1))
   write(ansi.eraseLine)
   const modeLabel = state.viewMode
-  write(`${ansi.bold}reconvo${ansi.reset}${ansi.dim}  browse  ${modeLabel}  ${rows.length} items${ansi.reset}`)
+  const scopeLabel = state.originalScopePaths
+    ? (state.scopePaths ? " · this project" : " · all projects")
+    : ""
+  write(`${ansi.bold}reconvo${ansi.reset}${ansi.dim}  browse  ${modeLabel}  ${rows.length} items${scopeLabel}${ansi.reset}`)
 
   // Tree rows
   for (let vi = 0; vi < visibleRows; vi++) {
@@ -64,7 +69,12 @@ function renderTree(state: TuiState): void {
     write(ansi.moveTo(vi + 2, 1))
     write(ansi.eraseLine)
 
-    if (!row) continue
+    if (!row) {
+      if (vi === 0 && rows.length === 0 && state.originalScopePaths) {
+        write(`${ansi.dim}  No sessions in this project. Press a to show all.${ansi.reset}`)
+      }
+      continue
+    }
 
     const isSelected = ri === cursor
 
@@ -143,7 +153,10 @@ function renderTree(state: TuiState): void {
   } else if (state.filter) {
     write(`${ansi.dim}filter: ${state.filter}  (esc to clear)${ansi.reset}`)
   } else {
-    write(`${ansi.dim}j/k navigate  enter open  c copy id  tab view  / filter  q quit${ansi.reset}`)
+    const scopeKey = state.originalScopePaths
+      ? (state.scopePaths ? "  a all" : "  a project")
+      : ""
+    write(`${ansi.dim}j/k navigate  enter open  c copy id  tab view${scopeKey}  / filter  q quit${ansi.reset}`)
   }
 }
 
@@ -287,7 +300,7 @@ function rebuildVisibleRows(state: TuiState): void {
   state.cursor = Math.min(state.cursor, Math.max(0, state.rows.length - 1))
 }
 
-function handleKey(key: Buffer, state: TuiState): "quit" | "open" | "copy" | "continue" {
+function handleKey(key: Buffer, state: TuiState): "quit" | "open" | "copy" | "toggle-scope" | "continue" {
   const str = key.toString()
 
   if (state.filterMode) {
@@ -428,15 +441,50 @@ function handleKey(key: Buffer, state: TuiState): "quit" | "open" | "copy" | "co
       return "continue"
     }
 
+    case "a":
+      if (state.originalScopePaths) return "toggle-scope"
+      return "continue"
+
     default:
       return "continue"
   }
 }
 
+async function reloadTree(state: TuiState): Promise<void> {
+  const { projects, treeRows: allRows, lineageRows, flatRows } = await loadTree(state.scopePaths)
+
+  const sessionProject = new Map<string, string>()
+  for (const proj of projects) {
+    for (const s of proj.sessions) {
+      sessionProject.set(s.session.id, proj.name)
+    }
+  }
+
+  state.allRows = allRows
+  state.lineageRows = lineageRows
+  state.flatRows = flatRows
+  state.sessionProject = sessionProject
+  state.cursor = 0
+  state.scroll = 0
+  state.previewSessionId = null
+  state.previewLines = []
+  state.collapsed = new Set()
+
+  if (state.viewMode === "recent") {
+    state.rows = flatRows
+  } else if (state.viewMode === "lineage") {
+    state.rows = lineageRows
+  } else {
+    state.rows = allRows
+  }
+  applyFilter(state)
+  if (state.viewMode !== "recent") rebuildVisibleRows(state)
+}
+
 export async function browse(scopePaths?: string[]): Promise<void> {
   const { projects, treeRows: allRows, lineageRows, flatRows } = await loadTree(scopePaths)
 
-  if (allRows.length === 0) {
+  if (allRows.length === 0 && !scopePaths) {
     console.log("No sessions found.")
     return
   }
@@ -451,11 +499,11 @@ export async function browse(scopePaths?: string[]): Promise<void> {
   const [width, height] = process.stdout.getWindowSize?.() ?? [80, 24]
 
   const state: TuiState = {
-    rows: flatRows,
+    rows: lineageRows,
     allRows,
     lineageRows,
     flatRows,
-    viewMode: "recent",
+    viewMode: "lineage",
     cursor: 0,
     scroll: 0,
     filter: "",
@@ -467,6 +515,8 @@ export async function browse(scopePaths?: string[]): Promise<void> {
     collapsed: new Set(),
     sessionProject,
     statusMessage: null,
+    scopePaths,
+    originalScopePaths: scopePaths,
   }
 
   await updatePreview(state)
@@ -502,6 +552,15 @@ export async function browse(scopePaths?: string[]): Promise<void> {
     if (action === "quit") {
       cleanup()
       return
+    }
+
+    if (action === "toggle-scope") {
+      state.scopePaths = state.scopePaths ? undefined : state.originalScopePaths
+      write(ansi.clear)
+      await reloadTree(state)
+      await updatePreview(state)
+      renderTree(state)
+      continue
     }
 
     if (action === "open") {

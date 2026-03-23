@@ -1,6 +1,6 @@
 {
   "name": "reconvo",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Human- and agent-friendly CLI to search Claude Code and OpenCode sessions",
   "type": "module",
   "license": "MIT",
@@ -22,7 +22,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "bun build src/cli.ts --outdir dist --target node --external duckdb && sed -i '' '1s|#!/usr/bin/env bun|#!/usr/bin/env node|' dist/cli.js",
+    "build": "bun build src/cli.ts --outdir dist --target node --external duckdb && sed -i '' '1s|#!/usr/bin/env bun|#!/usr/bin/env node|' dist/cli.js && perl -i -pe 'print \"process.noDeprecation = true;\\n\" if $. == 2' dist/cli.js",
     "prepublishOnly": "bun run build",
     "dev": "bun run src/cli.ts",
     "test": "bun test --timeout 30000",
