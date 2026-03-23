@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process"
 import { dirname, resolve } from "node:path"
 
 export interface GitContext {
@@ -8,14 +9,12 @@ export interface GitContext {
   siblings: string[]
 }
 
-async function run(cmd: string[]): Promise<string | null> {
-  try {
-    const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "ignore" })
-    const text = await new Response(proc.stdout).text()
-    return (await proc.exited) === 0 ? text.trim() : null
-  } catch {
-    return null
-  }
+function run(cmd: string[]): Promise<string | null> {
+  return new Promise((res) => {
+    execFile(cmd[0], cmd.slice(1), (err, stdout) => {
+      res(err ? null : stdout.trim())
+    })
+  })
 }
 
 export async function detect(cwd: string = process.cwd()): Promise<GitContext | null> {
@@ -46,5 +45,8 @@ export async function detect(cwd: string = process.cwd()): Promise<GitContext | 
 }
 
 export function scope(ctx: GitContext): string[] {
-  return [...new Set([...ctx.siblings, ctx.familyDir])]
+  if (ctx.siblings.length > 1) {
+    return [...new Set([...ctx.siblings, ctx.familyDir])]
+  }
+  return [ctx.root]
 }
