@@ -9,7 +9,7 @@
 
 import { homedir } from "node:os"
 import { join, dirname } from "node:path"
-import { existsSync, mkdirSync, statSync, readdirSync } from "node:fs"
+import { existsSync, mkdirSync, unlinkSync, readdirSync } from "node:fs"
 import duckdb from "duckdb"
 
 const INDEX_DIR = join(homedir(), ".local", "share", "reconvo")
@@ -23,10 +23,22 @@ function ensureDir(): void {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
 }
 
+function removeIndex(): void {
+  for (const suffix of ["", ".wal"]) {
+    try { unlinkSync(INDEX_PATH + suffix) } catch {}
+  }
+}
+
 export function getDb(): duckdb.Database {
   if (!_db) {
     ensureDir()
-    _db = new duckdb.Database(INDEX_PATH)
+    try {
+      _db = new duckdb.Database(INDEX_PATH)
+    } catch {
+      // Version mismatch or corruption — rebuild from scratch
+      removeIndex()
+      _db = new duckdb.Database(INDEX_PATH)
+    }
   }
   return _db
 }
