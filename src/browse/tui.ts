@@ -12,7 +12,7 @@
  *   /       search filter     q/esc quit
  */
 
-import { spawn } from "node:child_process"
+import { spawnSync } from "node:child_process"
 import { readMessages } from "../db/queries.ts"
 import type { ProjectNode, SessionNode, TreeRow } from "./tree.ts"
 import { loadTree } from "./tree.ts"
@@ -569,12 +569,12 @@ export async function browse(scopePaths?: string[]): Promise<void> {
         const session = (row.node as SessionNode).session
         cleanup()
         if (session.source === "opencode") {
-          spawn("opencode", ["--session", session.id], {
+          spawnSync("opencode", ["--session", session.id], {
             stdio: "inherit",
             cwd: session.directory,
           })
         } else {
-          spawn("claude", ["--resume", session.id], {
+          spawnSync("claude", ["--resume", session.id], {
             stdio: "inherit",
             cwd: session.directory,
           })
