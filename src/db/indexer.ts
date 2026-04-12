@@ -11,7 +11,7 @@ import { existsSync, statSync, readdirSync } from "node:fs"
 import duckdb from "duckdb"
 import {
   ensureSchema, getFileMtime, setFileMtime, removeSessions,
-  upsertSession, replaceMessages, exec, query, getDb,
+  upsertSession, replaceMessages, exec, query,
 } from "./index.ts"
 
 const CLAUDE_DIR = join(homedir(), ".claude", "projects")

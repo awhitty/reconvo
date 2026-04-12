@@ -14,6 +14,7 @@ let _conn: duckdb.Connection | null = null
 function getDb(): duckdb.Database {
   if (!_db) {
     _db = new duckdb.Database(":memory:")
+    _conn = null
   }
   return _db
 }
@@ -27,9 +28,11 @@ function getConn(): duckdb.Connection {
 
 /** Run a SQL query and return all rows. */
 export function query<T = Record<string, unknown>>(sql: string, ...params: unknown[]): Promise<T[]> {
+  const conn = getConn()
+  const db = _db
   return new Promise((resolve, reject) => {
-    const conn = getConn()
     const cb = (err: Error | null, rows: any) => {
+      void conn; void db  // prevent GC until callback fires
       if (err) reject(err)
       else resolve((rows ?? []) as T[])
     }
@@ -43,9 +46,11 @@ export function query<T = Record<string, unknown>>(sql: string, ...params: unkno
 
 /** Run a SQL statement (no results expected). */
 export function exec(sql: string): Promise<void> {
+  const conn = getConn()
+  const db = _db
   return new Promise((resolve, reject) => {
-    const conn = getConn()
     conn.exec(sql, (err: Error | null) => {
+      void conn; void db
       if (err) reject(err)
       else resolve()
     })
@@ -60,9 +65,7 @@ export async function loadSqliteScanner(): Promise<void> {
 
 /** Close the database connection. */
 export function close(): void {
-  if (_conn) {
-    _conn = null
-  }
+  _conn = null
   if (_db) {
     _db.close()
     _db = null

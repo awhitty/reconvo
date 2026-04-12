@@ -17,6 +17,7 @@ const INDEX_PATH = process.env.RECONVO_INDEX ?? join(INDEX_DIR, "index.duckdb")
 
 let _db: duckdb.Database | null = null
 let _conn: duckdb.Connection | null = null
+let _dbReady: Promise<duckdb.Database> | null = null
 
 function ensureDir(): void {
   const dir = dirname(INDEX_PATH)
@@ -29,31 +30,66 @@ function removeIndex(): void {
   }
 }
 
-export function getDb(): duckdb.Database {
-  if (!_db) {
-    ensureDir()
-    try {
-      _db = new duckdb.Database(INDEX_PATH)
-    } catch {
-      // Version mismatch or corruption — rebuild from scratch
-      removeIndex()
-      _db = new duckdb.Database(INDEX_PATH)
-    }
-  }
-  return _db
+function openDb(path: string): Promise<duckdb.Database> {
+  return new Promise((resolve, reject) => {
+    const db = new duckdb.Database(path, {}, (err: Error | null) => {
+      if (err) reject(err)
+      else resolve(db)
+    })
+  })
 }
 
-export function getConn(): duckdb.Connection {
+/** Get the database, opening it async to detect lock/corruption errors. */
+export async function getDbAsync(): Promise<duckdb.Database> {
+  if (_db) return _db
+  if (!_dbReady) {
+    _dbReady = (async () => {
+      ensureDir()
+      try {
+        _db = await openDb(INDEX_PATH)
+      } catch (e: any) {
+        if (e?.message?.includes("lock")) {
+          throw new Error(
+            `Index database is locked by another process.\n` +
+            `${e.message}\n` +
+            `Kill the other process or delete ${INDEX_PATH} to rebuild.`
+          )
+        }
+        // Version mismatch or corruption — rebuild from scratch
+        removeIndex()
+        _db = await openDb(INDEX_PATH)
+      }
+      _conn = null
+      return _db
+    })()
+  }
+  return _dbReady
+}
+
+export async function getConnAsync(): Promise<duckdb.Connection> {
   if (!_conn) {
-    _conn = getDb().connect()
+    const db = await getDbAsync()
+    _conn = db.connect()
   }
   return _conn
 }
 
-export function query<T = Record<string, unknown>>(sql: string, ...params: unknown[]): Promise<T[]> {
-  return new Promise((resolve, reject) => {
-    const conn = getConn()
+/** Reset db + connection so the next call re-opens from scratch. */
+function reset(): void {
+  _conn = null
+  _dbReady = null
+  if (_db) {
+    try { _db.close() } catch {}
+    _db = null
+  }
+}
+
+export async function query<T = Record<string, unknown>>(sql: string, ...params: unknown[]): Promise<T[]> {
+  const conn = await getConnAsync()
+  const db = _db
+  return new Promise<T[]>((resolve, reject) => {
     const cb = (err: Error | null, rows: any) => {
+      void conn; void db  // prevent GC until callback fires
       if (err) reject(err)
       else resolve((rows ?? []) as T[])
     }
@@ -65,10 +101,12 @@ export function query<T = Record<string, unknown>>(sql: string, ...params: unkno
   })
 }
 
-export function exec(sql: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const conn = getConn()
+export async function exec(sql: string): Promise<void> {
+  const conn = await getConnAsync()
+  const db = _db
+  return new Promise<void>((resolve, reject) => {
     conn.exec(sql, (err: Error | null) => {
+      void conn; void db
       if (err) reject(err)
       else resolve()
     })
@@ -76,11 +114,7 @@ export function exec(sql: string): Promise<void> {
 }
 
 export function close(): void {
-  _conn = null
-  if (_db) {
-    try { _db.close() } catch {}
-    _db = null
-  }
+  reset()
 }
 
 /** Create the index schema if it doesn't exist. */
