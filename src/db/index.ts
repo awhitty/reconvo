@@ -18,6 +18,7 @@ const INDEX_PATH = process.env.RECONVO_INDEX ?? join(INDEX_DIR, "index.duckdb")
 let _db: duckdb.Database | null = null
 let _conn: duckdb.Connection | null = null
 let _dbReady: Promise<duckdb.Database> | null = null
+let _readOnly = false
 
 function ensureDir(): void {
   const dir = dirname(INDEX_PATH)
@@ -30,9 +31,10 @@ function removeIndex(): void {
   }
 }
 
-function openDb(path: string): Promise<duckdb.Database> {
+function openDb(path: string, readOnly = false): Promise<duckdb.Database> {
+  const config = readOnly ? { access_mode: "READ_ONLY" } : {}
   return new Promise((resolve, reject) => {
-    const db = new duckdb.Database(path, {}, (err: Error | null) => {
+    const db = new duckdb.Database(path, config, (err: Error | null) => {
       if (err) reject(err)
       else resolve(db)
     })
@@ -46,18 +48,17 @@ export async function getDbAsync(): Promise<duckdb.Database> {
     _dbReady = (async () => {
       ensureDir()
       try {
-        _db = await openDb(INDEX_PATH)
+        _db = await openDb(INDEX_PATH, _readOnly)
       } catch (e: any) {
-        if (e?.message?.includes("lock")) {
-          throw new Error(
-            `Index database is locked by another process.\n` +
-            `${e.message}\n` +
-            `Kill the other process or delete ${INDEX_PATH} to rebuild.`
-          )
+        if (_readOnly || !e?.message?.includes("lock")) {
+          // Not a lock error, or already read-only — try rebuild
+          removeIndex()
+          _db = await openDb(INDEX_PATH, _readOnly)
+        } else {
+          // Write lock held by another process — fall back to read-only
+          _readOnly = true
+          _db = await openDb(INDEX_PATH, true)
         }
-        // Version mismatch or corruption — rebuild from scratch
-        removeIndex()
-        _db = await openDb(INDEX_PATH)
       }
       _conn = null
       return _db
@@ -72,6 +73,17 @@ export async function getConnAsync(): Promise<duckdb.Connection> {
     _conn = db.connect()
   }
   return _conn
+}
+
+/** Close write connection and reopen read-only. Call after indexing. */
+export async function downgradeToReadOnly(): Promise<void> {
+  reset()
+  _readOnly = true
+}
+
+/** True if the database is open (or will open) in read-only mode. */
+export function isReadOnly(): boolean {
+  return _readOnly
 }
 
 /** Reset db + connection so the next call re-opens from scratch. */

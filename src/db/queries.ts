@@ -21,7 +21,7 @@ export async function listSessions(opts?: {
   limit?: number
 }): Promise<Session[]> {
   const limit = opts?.limit ?? 50
-  const conditions: string[] = []
+  const conditions: string[] = ["message_count > 1"]
 
   if (opts?.source) {
     conditions.push(`source = '${esc(opts.source)}'`)

@@ -4,7 +4,7 @@
  */
 
 import { runIndex, needsIndex } from "./db/indexer.ts"
-import { close, getIndexPath } from "./db/index.ts"
+import { close, downgradeToReadOnly, isReadOnly, getIndexPath } from "./db/index.ts"
 import * as Q from "./db/queries.ts"
 import { detect, scope } from "./context/git.ts"
 import { ansi } from "./util/ansi.ts"
@@ -67,6 +67,12 @@ function flagVal(args: string[], name: string): number | undefined {
 
 /** Auto-index if needed. Quick mtime check, then incremental. */
 async function ensureIndexed(verbose = false): Promise<void> {
+  // Attempt to open the DB — if another process holds the write lock,
+  // this silently falls back to read-only and we skip indexing.
+  const { getDbAsync } = await import("./db/index.ts")
+  await getDbAsync()
+  if (isReadOnly()) return  // another instance is writing — just query
+
   const needs = await needsIndex()
   if (needs) {
     if (verbose) process.stderr.write("Updating index...\n")
@@ -77,6 +83,8 @@ async function ensureIndexed(verbose = false): Promise<void> {
       )
     }
   }
+  // Release the write lock so other instances can access the index
+  await downgradeToReadOnly()
 }
 
 // ── Commands ───────────────────────────────────────────────────
