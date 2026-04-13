@@ -1,6 +1,6 @@
 {
   "name": "reconvo",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Human- and agent-friendly CLI to search Claude Code and OpenCode sessions",
   "type": "module",
   "license": "MIT",
@@ -8,7 +8,15 @@
     "type": "git",
     "url": "https://github.com/awhitty/reconvo.git"
   },
-  "keywords": ["claude-code", "opencode", "ai", "conversation", "search", "cli", "duckdb"],
+  "keywords": [
+    "claude-code",
+    "opencode",
+    "ai",
+    "conversation",
+    "search",
+    "cli",
+    "duckdb"
+  ],
   "engines": {
     "node": ">=18",
     "bun": ">=1.0"
