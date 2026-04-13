@@ -385,8 +385,15 @@ export async function needsIndex(): Promise<boolean> {
   const rows = await query<{ cnt: number }>(`SELECT count(*) as cnt FROM session`)
   if (Number(rows[0]?.cnt ?? 0) === 0) return true
 
-  // Quick mtime check on a sample of files
   const jsonlFiles = discoverJsonlFiles()
+
+  // Check if file count changed (new projects or deleted files)
+  const trackedCount = await query<{ cnt: number }>(
+    `SELECT count(*) as cnt FROM source_file WHERE source = 'claude-code'`
+  )
+  if (jsonlFiles.length !== Number(trackedCount[0]?.cnt ?? 0)) return true
+
+  // Quick mtime check on a sample of recent files
   for (const file of jsonlFiles.slice(0, 5)) {
     const tracked = await getFileMtime(file.path)
     if (tracked === null || Math.abs(file.mtimeMs - tracked) >= 1000) return true
