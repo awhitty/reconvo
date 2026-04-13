@@ -20,12 +20,11 @@ import { ansi, CSI, TREE, write } from "../util/ansi.ts"
 import { ago, clockTime, truncate, visibleLength } from "../util/fmt.ts"
 import { copyToClipboard } from "../util/clipboard.ts"
 
-type ViewMode = "recent" | "tree" | "lineage"
-const VIEW_MODES: ViewMode[] = ["lineage", "recent", "tree"]
+type ViewMode = "recent" | "lineage"
+const VIEW_MODES: ViewMode[] = ["lineage", "recent"]
 
 interface TuiState {
   rows: TreeRow[]
-  allRows: TreeRow[]      // tree mode rows
   lineageRows: TreeRow[]  // lineage mode rows
   flatRows: TreeRow[]
   viewMode: ViewMode
@@ -262,7 +261,7 @@ function applyFilter(state: TuiState): void {
     return
   }
 
-  const baseRows = state.viewMode === "lineage" ? state.lineageRows : state.allRows
+  const baseRows = state.lineageRows
   if (!state.filter) {
     state.rows = baseRows
     rebuildVisibleRows(state)
@@ -291,7 +290,7 @@ function applyFilter(state: TuiState): void {
 }
 
 function rebuildVisibleRows(state: TuiState): void {
-  const baseForMode = state.viewMode === "lineage" ? state.lineageRows : state.allRows
+  const baseForMode = state.lineageRows
   const base = state.filter ? state.rows : baseForMode
   state.rows = base.filter((row) => {
     if (row.node.kind === "project") return true
@@ -393,12 +392,8 @@ function handleKey(key: Buffer, state: TuiState): "quit" | "open" | "copy" | "to
       state.previewSessionId = null
       if (state.viewMode === "recent") {
         state.rows = state.flatRows
-      } else if (state.viewMode === "lineage") {
-        state.rows = state.lineageRows
-        rebuildVisibleRows(state)
       } else {
-        state.rows = state.allRows
-        applyFilter(state)
+        state.rows = state.lineageRows
         rebuildVisibleRows(state)
       }
       return "continue"
@@ -451,7 +446,7 @@ function handleKey(key: Buffer, state: TuiState): "quit" | "open" | "copy" | "to
 }
 
 async function reloadTree(state: TuiState): Promise<void> {
-  const { projects, treeRows: allRows, lineageRows, flatRows } = await loadTree(state.scopePaths)
+  const { projects, lineageRows, flatRows } = await loadTree(state.scopePaths)
 
   const sessionProject = new Map<string, string>()
   for (const proj of projects) {
@@ -460,7 +455,6 @@ async function reloadTree(state: TuiState): Promise<void> {
     }
   }
 
-  state.allRows = allRows
   state.lineageRows = lineageRows
   state.flatRows = flatRows
   state.sessionProject = sessionProject
@@ -472,19 +466,17 @@ async function reloadTree(state: TuiState): Promise<void> {
 
   if (state.viewMode === "recent") {
     state.rows = flatRows
-  } else if (state.viewMode === "lineage") {
-    state.rows = lineageRows
   } else {
-    state.rows = allRows
+    state.rows = lineageRows
   }
   applyFilter(state)
   if (state.viewMode !== "recent") rebuildVisibleRows(state)
 }
 
 export async function browse(scopePaths?: string[]): Promise<void> {
-  const { projects, treeRows: allRows, lineageRows, flatRows } = await loadTree(scopePaths)
+  const { projects, lineageRows, flatRows } = await loadTree(scopePaths)
 
-  if (allRows.length === 0 && !scopePaths) {
+  if (lineageRows.length === 0 && !scopePaths) {
     console.log("No sessions found.")
     return
   }
@@ -500,7 +492,6 @@ export async function browse(scopePaths?: string[]): Promise<void> {
 
   const state: TuiState = {
     rows: lineageRows,
-    allRows,
     lineageRows,
     flatRows,
     viewMode: "lineage",

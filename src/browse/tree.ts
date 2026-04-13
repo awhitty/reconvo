@@ -1,10 +1,9 @@
 /**
  * Tree data model for the browse TUI.
  *
- * Three view modes:
- *   recent  — flat list of all sessions by recency
- *   tree    — grouped by project directory
+ * Two view modes:
  *   lineage — grouped by project, then parent→child fork nesting
+ *   recent  — flat list of all sessions by recency
  */
 
 import type { Session } from "../types.ts"
@@ -34,7 +33,6 @@ export interface TreeRow {
 
 export interface TreeData {
   projects: ProjectNode[]
-  treeRows: TreeRow[]     // project → sessions (flat)
   lineageRows: TreeRow[]  // project → parent → children (nested)
   flatRows: TreeRow[]     // sessions only, sorted by recency
 }
@@ -56,40 +54,12 @@ export async function loadTree(scopePaths?: string[]): Promise<TreeData> {
     else byDir.set(s.directory, [s])
   }
 
-  // Build project nodes (flat — no fork nesting)
-  const projects: ProjectNode[] = []
-  for (const [dir, sessions] of byDir) {
-    const name = dir.split("/").pop() ?? dir
-    const branch = sessions.find((s) => s.branch)?.branch ?? null
-
-    // For tree mode: all sessions flat
-    const sessionNodes = sessions.map((s) => makeSessionNode(s))
-
-    projects.push({
-      kind: "project",
-      directory: dir,
-      name,
-      branch,
-      sessions: sessionNodes,
-    })
-  }
-
-  // Sort: most recently active projects first
-  projects.sort((a, b) => {
-    const aLast = Math.max(...a.sessions.map((s) => s.session.lastAt))
-    const bLast = Math.max(...b.sessions.map((s) => s.session.lastAt))
-    return bLast - aLast
-  })
-
-  // Build tree rows (flat within each project)
-  const treeRows = buildRows(projects)
-
   // Build lineage rows (parent→child nesting)
-  const lineageProjects = buildLineageProjects(byDir)
-  const lineageRows = buildRows(lineageProjects)
+  const projects = buildLineageProjects(byDir)
+  const lineageRows = buildRows(projects)
 
   // Flat rows: sessions only, sorted by recency
-  const flatRows: TreeRow[] = treeRows
+  const flatRows: TreeRow[] = lineageRows
     .filter((r) => r.node.kind === "session")
     .sort((a, b) => {
       const aTime = (a.node as SessionNode).session.lastAt
@@ -97,7 +67,7 @@ export async function loadTree(scopePaths?: string[]): Promise<TreeData> {
       return bTime - aTime
     })
 
-  return { projects, treeRows, lineageRows, flatRows }
+  return { projects, lineageRows, flatRows }
 }
 
 /** Build lineage-aware project nodes: root sessions with children nested. */
