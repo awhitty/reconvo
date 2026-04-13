@@ -277,6 +277,41 @@ export async function getStats(scopePaths?: string[]): Promise<{
   }
 }
 
+/** Resolve a session by ID or prefix. Returns null if not found or ambiguous. */
+export async function resolveSession(prefix: string): Promise<Session | null> {
+  const rows = await query<{
+    id: string
+    source: string
+    directory: string
+    branch: string | null
+    title: string
+    parent_id: string | null
+    started_at: number
+    last_at: number
+    message_count: number
+  }>(`
+    SELECT id, source, directory, branch, title, parent_id, started_at, last_at, message_count
+    FROM session
+    WHERE id LIKE '${esc(prefix)}%'
+    LIMIT 2
+  `)
+
+  if (rows.length !== 1) return null
+
+  const r = rows[0]
+  return {
+    id: r.id,
+    source: r.source as Session["source"],
+    directory: r.directory,
+    branch: r.branch,
+    title: r.title ?? "(no title)",
+    parentId: r.parent_id ?? null,
+    startedAt: Number(r.started_at),
+    lastAt: Number(r.last_at),
+    messageCount: Number(r.message_count),
+  }
+}
+
 /** Find sessions that mention a file path. */
 export async function searchByFile(
   filePath: string,

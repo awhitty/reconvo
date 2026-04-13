@@ -303,6 +303,65 @@ async function cmdFiles(args: string[]): Promise<void> {
   }
 }
 
+async function cmdPick(args: string[]): Promise<void> {
+  const allFlag = args.includes("--all")
+  const source = parseSource(args)
+  const sinceMs = getSince(args)
+  const scopePaths = await getScope(allFlag)
+
+  const sessions = await Q.listSessions({ source, scopePaths, sinceMs, limit: 200 })
+
+  if (sessions.length === 0) {
+    process.stderr.write("No sessions found.\n")
+    process.exitCode = 1
+    return
+  }
+
+  const { pick } = await import("./pick.ts")
+  const selected = await pick(sessions)
+
+  if (selected) {
+    console.log(JSON.stringify({
+      source: selected.source,
+      id: selected.id,
+      directory: selected.directory,
+    }))
+  } else {
+    process.exitCode = 130
+  }
+}
+
+async function cmdResume(args: string[]): Promise<void> {
+  const positional = stripFlags(args)
+  const prefix = positional[0]
+
+  if (!prefix) {
+    fail("Usage: reconvo resume <session-id>")
+  }
+
+  const session = await Q.resolveSession(prefix)
+
+  if (!session) {
+    fail(`No unique session found for: ${prefix}`)
+  }
+
+  process.stderr.write(`${DIM}${session.source} → ${session.directory}${RESET}\n`)
+
+  const { spawnSync } = await import("node:child_process")
+
+  if (session.source === "opencode") {
+    spawnSync("opencode", ["--session", session.id], {
+      stdio: "inherit",
+      cwd: session.directory,
+    })
+  } else {
+    spawnSync("claude", ["--resume", session.id], {
+      stdio: "inherit",
+      cwd: session.directory,
+    })
+  }
+}
+
 function cmdHelp(): void {
   console.log(`${BOLD}reconvo${RESET} — recall conversation across Claude Code and OpenCode
 
@@ -315,6 +374,8 @@ ${BOLD}Commands:${RESET}
   stats              Usage dashboard
   files <path>       Find sessions that touched a file
   browse             Interactive TUI navigator
+  pick               Interactive session picker (outputs JSON to stdout)
+  resume <id>        Open a session in its original tool
   help               Show this help
 
 ${BOLD}Index flags:${RESET}
@@ -375,6 +436,10 @@ try {
       await cmdStats(cmdArgs)
     } else if (cmd === "files") {
       await cmdFiles(cmdArgs)
+    } else if (cmd === "pick") {
+      await cmdPick(cmdArgs)
+    } else if (cmd === "resume") {
+      await cmdResume(cmdArgs)
     } else {
       fail(`Unknown command: ${cmd}\nRun 'reconvo help' for usage.`)
     }
