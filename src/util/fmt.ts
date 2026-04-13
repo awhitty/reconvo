@@ -77,6 +77,36 @@ export function col(s: string, width: number): string {
 }
 
 /**
+ * Clean Claude Code XML markup from message content.
+ * Transforms tool-use tags into human-readable form.
+ */
+export function cleanMarkup(s: string): string {
+  return s
+    // Slash commands: <command-name>/foo</command-name> → /foo
+    .replace(/<command-name>([^<]*)<\/command-name>/g, "$1")
+    // Strip command-message and command-args (redundant with command-name)
+    .replace(/<command-message>[^<]*<\/command-message>/g, "")
+    .replace(/<command-args>[^<]*<\/command-args>/g, "")
+    // Shell commands: <bash-input>ls</bash-input> → $ ls
+    .replace(/<bash-input>([^<]*)<\/bash-input>/g, "$ $1")
+    // Shell output: dim or strip
+    .replace(/<bash-stdout>([^<]*)<\/bash-stdout>/g, "$1")
+    .replace(/<bash-stderr>([^<]*)<\/bash-stderr>/g, "$1")
+    // Task notifications → [task: summary]
+    .replace(/<task-notification>[\s\S]*?<summary>([^<]*)<\/summary>[\s\S]*?<\/task-notification>/g, "[task: $1]")
+    // Local command output: keep the text
+    .replace(/<local-command-stdout>([^<]*)<\/local-command-stdout>/g, "$1")
+    .replace(/<local-command-stderr>([^<]*)<\/local-command-stderr>/g, "$1")
+    // Strip system boilerplate entirely
+    .replace(/<local-command-caveat>[\s\S]*?<\/local-command-caveat>/g, "")
+    // Strip any remaining unknown tags
+    .replace(/<\/?[a-z_-]+>/g, "")
+    // Collapse whitespace
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+/**
  * Parse a --since value into epoch ms.
  * Accepts: "2h", "3d", "1w", "today", "yesterday", "2026-03-10"
  */

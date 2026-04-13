@@ -14,6 +14,7 @@ import {
   ensureSchema, getFileMtime, setFileMtime, removeSessions,
   upsertSession, replaceMessages, exec, query,
 } from "./index.ts"
+import { cleanMarkup } from "../util/fmt.ts"
 
 const CLAUDE_DIR = join(homedir(), ".claude", "projects")
 const OPENCODE_DB = process.env.OPENCODE_DB ?? join(homedir(), ".local", "share", "opencode", "opencode.db")
@@ -137,7 +138,7 @@ async function indexJsonlFile(filePath: string, slug: string): Promise<number> {
         source: "claude-code",
         directory,
         branch,
-        title: firstUser ? firstUser.content.replace(/\n/g, " ").replace(/\s+/g, " ").trim().slice(0, 200) : "(no title)",
+        title: firstUser ? cleanMarkup(firstUser.content).slice(0, 200) : "(no title)",
         rootUuid,
         startedAt,
         lastAt,
