@@ -154,6 +154,9 @@ export async function ensureSchema(): Promise<void> {
     )
   `)
 
+  // Migration: add root_uuid for Claude Code lineage detection
+  await exec(`ALTER TABLE session ADD COLUMN IF NOT EXISTS root_uuid VARCHAR`)
+
   await exec(`
     CREATE TABLE IF NOT EXISTS message (
       session_id VARCHAR NOT NULL,
@@ -211,13 +214,14 @@ export async function upsertSession(s: {
   branch: string | null
   title: string
   parentId?: string | null
+  rootUuid?: string | null
   startedAt: number
   lastAt: number
   messageCount: number
 }): Promise<void> {
   await exec(`DELETE FROM session WHERE id = '${s.id}'`)
   await exec(`
-    INSERT INTO session (id, source, directory, branch, title, parent_id, started_at, last_at, message_count)
+    INSERT INTO session (id, source, directory, branch, title, parent_id, root_uuid, started_at, last_at, message_count)
     VALUES (
       '${s.id}',
       '${s.source}',
@@ -225,6 +229,7 @@ export async function upsertSession(s: {
       ${s.branch ? `'${s.branch.replace(/'/g, "''")}'` : "NULL"},
       '${(s.title ?? "").replace(/\x00/g, "").replace(/'/g, "''")}',
       ${s.parentId ? `'${s.parentId}'` : "NULL"},
+      ${s.rootUuid ? `'${s.rootUuid}'` : "NULL"},
       ${s.startedAt},
       ${s.lastAt},
       ${s.messageCount}

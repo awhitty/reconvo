@@ -7,7 +7,8 @@
 
 import { homedir } from "node:os"
 import { join } from "node:path"
-import { existsSync, statSync, readdirSync } from "node:fs"
+import { existsSync, statSync, readdirSync, createReadStream } from "node:fs"
+import { createInterface } from "node:readline"
 import duckdb from "duckdb"
 import {
   ensureSchema, getFileMtime, setFileMtime, removeSessions,
@@ -46,10 +47,29 @@ function slugToPath(slug: string): string {
   return slug.replace(/-/g, "/")
 }
 
+/** Extract the root UUID from a JSONL file (first message with parentUuid=null). */
+async function extractRootUuid(filePath: string): Promise<string | null> {
+  const rl = createInterface({ input: createReadStream(filePath) })
+  try {
+    for await (const line of rl) {
+      try {
+        const obj = JSON.parse(line)
+        if (obj.uuid && obj.parentUuid === null) {
+          return obj.uuid
+        }
+      } catch {}
+    }
+  } finally {
+    rl.close()
+  }
+  return null
+}
+
 /** Index a single JSONL file using DuckDB's native JSON parsing. */
 async function indexJsonlFile(filePath: string, slug: string): Promise<number> {
   const directory = slugToPath(slug)
   const escapedPath = filePath.replace(/'/g, "''")
+  const rootUuid = await extractRootUuid(filePath)
 
   // Use a temporary in-memory DuckDB to parse the JSONL, then extract rows
   // We query the JSONL file directly and insert results into our index
@@ -118,6 +138,7 @@ async function indexJsonlFile(filePath: string, slug: string): Promise<number> {
         directory,
         branch,
         title: firstUser ? firstUser.content.replace(/\n/g, " ").replace(/\s+/g, " ").trim().slice(0, 200) : "(no title)",
+        rootUuid,
         startedAt,
         lastAt,
         messageCount: userMsgCount,
@@ -314,12 +335,41 @@ export async function runIndex(opts?: { force?: boolean; verbose?: boolean }): P
     if (verbose) process.stderr.write(`opencode error: ${e}\n`)
   }
 
+  // Detect Claude Code lineage (branched sessions share the same root UUID)
+  await resolveClaudeCodeLineage()
+
   return {
     filesChecked,
     filesIndexed,
     sessionsIndexed,
     elapsed: Date.now() - start,
   }
+}
+
+/** Set parent_id for Claude Code sessions that share a root UUID. */
+async function resolveClaudeCodeLineage(): Promise<void> {
+  await exec(`
+    UPDATE session SET parent_id = (
+      SELECT p.id
+      FROM session p
+      WHERE p.root_uuid = session.root_uuid
+        AND p.directory = session.directory
+        AND p.id != session.id
+        AND p.source = 'claude-code'
+        AND (p.message_count < session.message_count
+             OR (p.message_count = session.message_count AND p.started_at < session.started_at))
+      ORDER BY p.message_count DESC, p.started_at ASC
+      LIMIT 1
+    )
+    WHERE source = 'claude-code'
+      AND root_uuid IS NOT NULL
+      AND root_uuid IN (
+        SELECT root_uuid FROM session
+        WHERE source = 'claude-code' AND root_uuid IS NOT NULL
+        GROUP BY root_uuid, directory
+        HAVING count(*) > 1
+      )
+  `)
 }
 
 /** Quick check: are there any un-indexed or changed files? */
