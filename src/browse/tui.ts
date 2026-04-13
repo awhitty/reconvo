@@ -155,7 +155,7 @@ function renderTree(state: TuiState): void {
     const scopeKey = state.originalScopePaths
       ? (state.scopePaths ? "  a all" : "  a project")
       : ""
-    write(`${ansi.dim}j/k navigate  enter open  c copy id  tab view${scopeKey}  / filter  q quit${ansi.reset}`)
+    write(`${ansi.dim}j/k navigate  enter open  c copy  e expand${scopeKey}  tab view  / filter  q quit${ansi.reset}`)
   }
 }
 
@@ -440,6 +440,22 @@ function handleKey(key: Buffer, state: TuiState): "quit" | "open" | "copy" | "to
       if (state.originalScopePaths) return "toggle-scope"
       return "continue"
 
+    case "e": {
+      if (state.viewMode === "recent") return "continue"
+      const allCollapsed = state.lineageRows
+        .filter(r => r.node.kind === "project")
+        .every(r => state.collapsed.has(r.projectIdx))
+      if (allCollapsed) {
+        state.collapsed.clear()
+      } else {
+        for (const row of state.lineageRows) {
+          if (row.node.kind === "project") state.collapsed.add(row.projectIdx)
+        }
+      }
+      rebuildVisibleRows(state)
+      return "continue"
+    }
+
     default:
       return "continue"
   }
@@ -546,9 +562,25 @@ export async function browse(scopePaths?: string[]): Promise<void> {
     }
 
     if (action === "toggle-scope") {
+      const wasScoped = !!state.scopePaths
       state.scopePaths = state.scopePaths ? undefined : state.originalScopePaths
       write(ansi.clear)
       await reloadTree(state)
+
+      // When expanding to all projects, collapse non-focused ones
+      if (wasScoped && state.originalScopePaths) {
+        for (const row of state.lineageRows) {
+          if (row.node.kind === "project") {
+            const proj = row.node as ProjectNode
+            const isFocused = state.originalScopePaths.some(p => proj.directory.startsWith(p))
+            if (!isFocused) {
+              state.collapsed.add(row.projectIdx)
+            }
+          }
+        }
+        rebuildVisibleRows(state)
+      }
+
       await updatePreview(state)
       renderTree(state)
       continue
