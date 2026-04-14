@@ -331,6 +331,33 @@ async function cmdPick(args: string[]): Promise<void> {
   }
 }
 
+async function cmdSkill(args: string[]): Promise<void> {
+  const sub = args[0]
+  const scope: "global" | "project" = args.includes("--global") ? "global" : "project"
+
+  const { installSkill, uninstallSkill, isSkillInstalled, getSkillPath } = await import("./skill.ts")
+
+  if (sub === "install") {
+    const path = installSkill(scope)
+    console.log(`Installed ${BOLD}reconvo${RESET} skill (${scope}) → ${DIM}${path}${RESET}`)
+  } else if (sub === "uninstall") {
+    const path = uninstallSkill(scope)
+    if (path) {
+      console.log(`Uninstalled ${BOLD}reconvo${RESET} skill (${scope})`)
+    } else {
+      console.log(`${DIM}not installed (${scope})${RESET}`)
+    }
+  } else if (sub === "status" || !sub) {
+    const globalInstalled = isSkillInstalled("global")
+    const projectInstalled = isSkillInstalled("project")
+    const mark = (b: boolean) => b ? "✓" : "·"
+    console.log(`${mark(globalInstalled)}  global   ${DIM}${getSkillPath("global")}${RESET}`)
+    console.log(`${mark(projectInstalled)}  project  ${DIM}${getSkillPath("project")}${RESET}`)
+  } else {
+    fail(`Usage: reconvo skill <install|uninstall|status> [--global]\nDefault scope is project.`)
+  }
+}
+
 async function cmdResume(args: string[]): Promise<void> {
   const positional = stripFlags(args)
   const prefix = positional[0]
@@ -376,6 +403,7 @@ ${BOLD}Commands:${RESET}
   browse             Interactive TUI navigator
   pick               Interactive session picker (outputs JSON to stdout)
   resume <id>        Open a session in its original tool
+  skill <cmd>        Install/uninstall the reconvo agent skill
   help               Show this help
 
 ${BOLD}Index flags:${RESET}
@@ -415,6 +443,8 @@ try {
     cmdHelp()
   } else if (cmd === "index") {
     await cmdIndex(cmdArgs)
+  } else if (cmd === "skill") {
+    await cmdSkill(cmdArgs)
   } else {
     // Auto-index before any query command
     await ensureIndexed(cmdArgs.includes("--verbose") || cmdArgs.includes("-v"))
