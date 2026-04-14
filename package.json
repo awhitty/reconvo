@@ -1,6 +1,6 @@
 {
   "name": "reconvo",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Human- and agent-friendly CLI to search Claude Code and OpenCode sessions",
   "type": "module",
   "license": "MIT",
