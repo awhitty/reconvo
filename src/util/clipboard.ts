@@ -1,5 +1,7 @@
+import { spawnSync } from "node:child_process"
+
 export async function copyToClipboard(text: string): Promise<boolean> {
-  const candidates =
+  const candidates: string[][] =
     process.platform === "darwin"
       ? [["pbcopy"]]
       : process.platform === "win32"
@@ -7,14 +9,9 @@ export async function copyToClipboard(text: string): Promise<boolean> {
         : [["xclip", "-selection", "clipboard"], ["xsel", "--clipboard", "--input"]]
 
   for (const [cmd, ...args] of candidates) {
-    if (!Bun.which(cmd)) continue
-    const proc = Bun.spawn([cmd, ...args], {
-      stdin: new Response(text),
-      stdout: "ignore",
-      stderr: "ignore",
-    })
-    const code = await proc.exited
-    return code === 0
+    const result = spawnSync(cmd, args, { input: text, stdio: ["pipe", "ignore", "ignore"] })
+    if (result.error) continue  // command not found
+    return result.status === 0
   }
   return false
 }
