@@ -15,10 +15,31 @@ import duckdb from "duckdb"
 const INDEX_DIR = join(homedir(), ".local", "share", "reconvo")
 const INDEX_PATH = process.env.RECONVO_INDEX ?? join(INDEX_DIR, "index.duckdb")
 
-let _db: duckdb.Database | null = null
-let _conn: duckdb.Connection | null = null
-let _dbReady: Promise<duckdb.Database> | null = null
-let _readOnly = false
+/**
+ * Singleton state, deliberately stored on globalThis.
+ *
+ * Bun's bundler duplicates a module that is reachable from both the static
+ * import graph and a dynamic import() subgraph — each copy gets its own
+ * module-level variables. Two copies of this module meant every command
+ * opened index.duckdb read-write TWICE in the same process. DuckDB's file
+ * lock is fcntl-based and per-process, so the second open silently succeeds
+ * and the two independent database instances corrupt the file's ART indexes
+ * ("empty child ... in Node48::GetChild"). Sharing state via globalThis
+ * guarantees one database instance per process no matter how many copies of
+ * this module the bundler emits.
+ */
+type DbState = {
+  db: duckdb.Database | null
+  conn: duckdb.Connection | null
+  dbReady: Promise<duckdb.Database> | null
+  readOnly: boolean
+}
+const S: DbState = ((globalThis as Record<string, unknown> & { __reconvoDbState?: DbState }).__reconvoDbState ??= {
+  db: null,
+  conn: null,
+  dbReady: null,
+  readOnly: false,
+})
 
 function ensureDir(): void {
   const dir = dirname(INDEX_PATH)
@@ -43,62 +64,62 @@ function openDb(path: string, readOnly = false): Promise<duckdb.Database> {
 
 /** Get the database, opening it async to detect lock/corruption errors. */
 export async function getDbAsync(): Promise<duckdb.Database> {
-  if (_db) return _db
-  if (!_dbReady) {
-    _dbReady = (async () => {
+  if (S.db) return S.db
+  if (!S.dbReady) {
+    S.dbReady = (async () => {
       ensureDir()
       try {
-        _db = await openDb(INDEX_PATH, _readOnly)
+        S.db = await openDb(INDEX_PATH, S.readOnly)
       } catch (e: any) {
-        if (_readOnly || !e?.message?.includes("lock")) {
+        if (S.readOnly || !e?.message?.includes("lock")) {
           // Not a lock error, or already read-only — try rebuild
           removeIndex()
-          _db = await openDb(INDEX_PATH, _readOnly)
+          S.db = await openDb(INDEX_PATH, S.readOnly)
         } else {
           // Write lock held by another process — fall back to read-only
-          _readOnly = true
-          _db = await openDb(INDEX_PATH, true)
+          S.readOnly = true
+          S.db = await openDb(INDEX_PATH, true)
         }
       }
-      _conn = null
-      return _db
+      S.conn = null
+      return S.db
     })()
   }
-  return _dbReady
+  return S.dbReady
 }
 
 export async function getConnAsync(): Promise<duckdb.Connection> {
-  if (!_conn) {
+  if (!S.conn) {
     const db = await getDbAsync()
-    _conn = db.connect()
+    S.conn = db.connect()
   }
-  return _conn
+  return S.conn
 }
 
 /** Close write connection and reopen read-only. Call after indexing. */
 export async function downgradeToReadOnly(): Promise<void> {
   reset()
-  _readOnly = true
+  S.readOnly = true
 }
 
 /** True if the database is open (or will open) in read-only mode. */
 export function isReadOnly(): boolean {
-  return _readOnly
+  return S.readOnly
 }
 
 /** Reset db + connection so the next call re-opens from scratch. */
 function reset(): void {
-  _conn = null
-  _dbReady = null
-  if (_db) {
-    try { _db.close() } catch {}
-    _db = null
+  S.conn = null
+  S.dbReady = null
+  if (S.db) {
+    try { S.db.close() } catch {}
+    S.db = null
   }
 }
 
 export async function query<T = Record<string, unknown>>(sql: string, ...params: unknown[]): Promise<T[]> {
   const conn = await getConnAsync()
-  const db = _db
+  const db = S.db
   return new Promise<T[]>((resolve, reject) => {
     const cb = (err: Error | null, rows: any) => {
       void conn; void db  // prevent GC until callback fires
@@ -115,7 +136,7 @@ export async function query<T = Record<string, unknown>>(sql: string, ...params:
 
 export async function exec(sql: string): Promise<void> {
   const conn = await getConnAsync()
-  const db = _db
+  const db = S.db
   return new Promise<void>((resolve, reject) => {
     conn.exec(sql, (err: Error | null) => {
       void conn; void db

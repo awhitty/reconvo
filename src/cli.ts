@@ -4,7 +4,7 @@
  */
 
 import { runIndex, needsIndex } from "./db/indexer.ts"
-import { close, downgradeToReadOnly, isReadOnly, getIndexPath } from "./db/index.ts"
+import { close, downgradeToReadOnly, getDbAsync, isReadOnly, getIndexPath } from "./db/index.ts"
 import * as Q from "./db/queries.ts"
 import { detect, scope } from "./context/git.ts"
 import { ansi } from "./util/ansi.ts"
@@ -69,7 +69,13 @@ function flagVal(args: string[], name: string): number | undefined {
 async function ensureIndexed(verbose = false): Promise<void> {
   // Attempt to open the DB — if another process holds the write lock,
   // this silently falls back to read-only and we skip indexing.
-  const { getDbAsync } = await import("./db/index.ts")
+  //
+  // NOTE: this must use the static import above. A dynamic
+  // `await import("./db/index.ts")` here made bun's bundler emit a second
+  // copy of the db module with its own `_db` singleton, so every command
+  // opened index.duckdb read-write TWICE in the same process (DuckDB's
+  // fcntl lock cannot protect against a same-process double open) —
+  // recurring ART index corruption ("Node48::GetChild").
   await getDbAsync()
   if (isReadOnly()) return  // another instance is writing — just query
 
